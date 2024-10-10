@@ -15,8 +15,7 @@ const Error_Not_owner:u64=3;
 const Error_Invalid_WithdrawalAmount:u64=4;
 
 
-public struct User has key,store{
-    id:UID,
+public struct User has store{
     nameofuser:String,
     balance:Balance<SUI>,
     discountcouponpoints:u64
@@ -85,15 +84,7 @@ public struct Refund has copy,drop{
     recipient:address,
     amount:u64
 }
-public  fun register_user(name:String,ctx:&mut TxContext):User{
-    let userid=object::new(ctx);
-    User{
-        id:userid,
-         nameofuser:name,
-         balance:zero<SUI>(),
-         discountcouponpoints:0
-    }
-}
+
 public entry fun register_truck_company(name:String,email:String,contact:String,ctx:&mut TxContext){
 
     let companyid=object::new(ctx);
@@ -144,18 +135,32 @@ public entry fun register_truck(truckcompany:&mut Uber_Truck,nameoftruck:String,
  truckcompany.trucks_count= truckcompany.trucks_count+1;
 
 }
+///register user
+
+public entry fun user_sign_in(name:String,truckcompany:&mut Uber_Truck,_ctx:&mut TxContext){
+   
+   
+  let newuser= User{
+         nameofuser:name,
+         balance:zero<SUI>(),
+         discountcouponpoints:0
+    };
+    truckcompany.registeredusers.push_back(newuser);
+}
 
   //hire for truck
-   public entry fun hire_truck(truck_id:u64, payment_coin: &mut Coin<SUI>,userid:u64,truckcompany:&mut Uber_Truck,  ctx: &mut TxContext){
+public entry fun hire_truck(truck_id:u64, payment_coin: &mut Coin<SUI>,userid:u64,truckcompany:&mut Uber_Truck,  ctx: &mut TxContext){
 //check if truck exists
-assert!(truckcompany.trucks_count >truck_id,ETRUCKNOTAVAILABLE);
+assert!(truckcompany.trucks.length() >=truck_id,ETRUCKNOTAVAILABLE);
 //check availability of truck
       assert!(truckcompany.trucks[truck_id].available==true,ETRUCKNOTAVAILABLE);
 //check if user is registered
 
 assert!(truckcompany.registeredusers.length()>=userid,EMUSTBERIGISTERED);
+
     //check user balance is enough to hire the truck
      assert!(payment_coin.value() >= truckcompany.trucks[truck_id].hirecost, EINSUFFICIENTBALANCE);
+
     let total_price=truckcompany.trucks[truck_id].hirecost;
  
     let paid = split(payment_coin, total_price, ctx);  
@@ -249,13 +254,12 @@ truckcompany.refundrequest.push_back(new_refund_request);
 }
   //approve refund
 
-   public fun owner_refund(
+   public entry fun owner_refund(
         cap: &TruckOwner,          
         companytruck: &mut Uber_Truck,
-        ctx: &mut TxContext,
         amount:u64,
-        
-        userid:u64
+        userid:u64,
+         ctx: &mut TxContext
     ) {
 
         
