@@ -6,6 +6,7 @@ use sui::coin::{Coin,split, put,take};
 use sui::balance::{Balance,zero};
 use sui::sui::SUI;
 use sui::event;
+ use sui::object::uid_to_inner;
 //define errors
 
 const ETRUCKNOTAVAILABLE:u64=0;
@@ -13,7 +14,8 @@ const EINSUFFICIENTBALANCE:u64=1;
 const EMUSTBERIGISTERED:u64=2;
 const Error_Not_owner:u64=3;
 const Error_Invalid_WithdrawalAmount:u64=4;
-
+const ENOTBOOKED:u64=5;
+const ENotOwner:u64=6;
 
 public struct User has store{
     nameofuser:String,
@@ -36,7 +38,6 @@ public struct Truck has store,drop{
 
     public struct Uber_Truck has key,store{
     id: UID,
-    ownercap:ID,
     nameofcompany:String,
     officialemail:String,
     contactnumber:String,
@@ -44,7 +45,7 @@ public struct Truck has store,drop{
     trucks:vector<Truck>,
     trucks_count:u64,
     registeredusers:vector<User>,
-    bookedtrucks:vector<Truck>,
+    bookedtrucks:vector<u64>,
     refundrequest:vector<RefundRequest>
 
 }
@@ -86,12 +87,11 @@ public struct Refund has copy,drop{
 }
 
 public entry fun register_truck_company(name:String,email:String,contact:String,ctx:&mut TxContext){
-
+//ensure its the only owner who can register truck
     let companyid=object::new(ctx);
-    let company_id=object::uid_to_inner(&companyid);
+    let company_id: ID=object::uid_to_inner(&companyid);
     let new_truck_company= Uber_Truck {
         id:companyid,
-        ownercap:company_id,
         nameofcompany:name,
         officialemail:email,
         contactnumber:contact,
@@ -116,8 +116,10 @@ public entry fun register_truck_company(name:String,email:String,contact:String,
      transfer::share_object(new_truck_company);
 }
 //register truck
-public entry fun register_truck(truckcompany:&mut Uber_Truck,nameoftruck:String,registrationnumber:String,description:String,cost:u64,route:String,_ctx:&mut TxContext){
+public entry fun register_truck(truckcompany:&mut Uber_Truck,ownercap:&TruckOwner,nameoftruck:String,registrationnumber:String,description:String,cost:u64,route:String,_ctx:&mut TxContext){
 //verify that company is already registered do it
+  //let owner_id = sui::object::uid_to_inner(&truckcompany.id);
+   // assert!(&ownercap.truckcompany_id == object::uid_as_inner(&truckcompany.id),ENotOwner);
 
     let trucks_count=0;
     let new_truck=Truck {
@@ -138,8 +140,20 @@ public entry fun register_truck(truckcompany:&mut Uber_Truck,nameoftruck:String,
 ///register user
 
 public entry fun user_sign_in(name:String,truckcompany:&mut Uber_Truck,_ctx:&mut TxContext){
-   
-   
+    let mut index = 0;
+    let user_count = vector::length(&truckcompany.registeredusers);
+
+   //check if user username is already taken
+   while (index < user_count) {
+        let user = &truckcompany.registeredusers[index];
+        if (user.nameofuser == name) {
+            // Abort or return early if the user is already registered
+             abort 0
+        };
+        index = index + 1;
+    };
+
+    //register user
   let newuser= User{
          nameofuser:name,
          balance:zero<SUI>(),
@@ -169,17 +183,7 @@ assert!(truckcompany.registeredusers.length()>=userid,EMUSTBERIGISTERED);
 
 //update truck status
    truckcompany.trucks[truck_id].available==false;
- let bookedTruck=Truck{
-    id: truckcompany.trucks[truck_id].id,
-        owner: truckcompany.trucks[truck_id].owner,
-        nameoftruck:truckcompany.trucks[truck_id].nameoftruck,
-        registrationnumber: truckcompany.trucks[truck_id].registrationnumber,
-        description: truckcompany.trucks[truck_id].description,
-        hirecost: truckcompany.trucks[truck_id].hirecost,
-        route: truckcompany.trucks[truck_id].route,
-        available: truckcompany.trucks[truck_id].available
- };
-    truckcompany.bookedtrucks.push_back(bookedTruck);
+    truckcompany.bookedtrucks.push_back(truck_id);
     //generate event
     event::emit(TructBooked{
      name:truckcompany.trucks[truck_id].nameoftruck,
@@ -192,8 +196,8 @@ assert!(truckcompany.registeredusers.length()>=userid,EMUSTBERIGISTERED);
  public fun withdraw_all_funds(
         cap: &TruckOwner,          // Admin Capability
         companytruck: &mut Uber_Truck,
+        recipient:address,
         ctx: &mut TxContext,
-        recipient:address     // Transaction context
     ) {
         assert!(object::id(companytruck)==cap.truckcompany_id, Error_Not_owner);
 
@@ -213,9 +217,9 @@ assert!(truckcompany.registeredusers.length()>=userid,EMUSTBERIGISTERED);
    public fun withdraw_specific_funds(
         cap: &TruckOwner,          // Admin Capability
         companytruck: &mut Uber_Truck,
-        ctx: &mut TxContext,
         amount:u64,
-        recipient:address     // Transaction context
+        recipient:address,
+         ctx: &mut TxContext,
     ) {
 
         //verify amount
@@ -239,18 +243,33 @@ public entry fun refund_request(recipient:address,truckcompany:&mut Uber_Truck, 
 //verify if user exists
  assert!(truckcompany.registeredusers.length()>=userid,EMUSTBERIGISTERED);
 
-let new_refund_request=RefundRequest{
-    id:object::new(ctx),
-    reason,
-    truckid,
-    userid,
-    recipient
-};
+//verify if the user has already booked truck
 
-truckcompany.refundrequest.push_back(new_refund_request);
- event::emit(Refundrequest{
+   let mut index = 0;
+    let booked_count = vector::length(&truckcompany.bookedtrucks);
+     let mut refundrequeststatement:bool=false;
+   //check if user username is already taken
+   while (index < booked_count) {
+        let truck = &truckcompany.bookedtrucks[index];
+        if (truck == truckid) {
+            let new_refund_request=RefundRequest{
+            id:object::new(ctx),
+            reason,
+            truckid,
+            userid,
+            recipient
+        };
+
+    truckcompany.refundrequest.push_back(new_refund_request);
+    refundrequeststatement=true;
+     event::emit(Refundrequest{
     success:reason
- })
+   })};
+        index = index + 1;
+    };
+
+assert!(refundrequeststatement==true,ENOTBOOKED);
+
 }
   //approve refund
 
