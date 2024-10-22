@@ -119,7 +119,7 @@ public entry fun register_truck_company(name:String,email:String,contact:String,
 public entry fun register_truck(truckcompany:&mut Uber_Truck,ownercap:&TruckOwner,nameoftruck:String,registrationnumber:String,description:String,cost:u64,route:String,_ctx:&mut TxContext){
 //verify that company is already registered do it
   //let owner_id = sui::object::uid_to_inner(&truckcompany.id);
-   // assert!(&ownercap.truckcompany_id == object::uid_as_inner(&truckcompany.id),ENotOwner);
+   assert!(&ownercap.truckcompany_id == object::uid_as_inner(&truckcompany.id),ENotOwner);
 
     let trucks_count=0;
     let new_truck=Truck {
