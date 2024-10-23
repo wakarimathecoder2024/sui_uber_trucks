@@ -193,7 +193,7 @@ assert!(truckcompany.registeredusers.length()>=userid,EMUSTBERIGISTERED);
 
 
   //owener withdraw all funds
- public fun withdraw_all_funds(
+ public entry fun withdraw_all_funds(
         cap: &TruckOwner,          // Admin Capability
         companytruck: &mut Uber_Truck,
         recipient:address,
@@ -214,7 +214,7 @@ assert!(truckcompany.registeredusers.length()>=userid,EMUSTBERIGISTERED);
 
   //owener widthradw specific funds
  
-   public fun withdraw_specific_funds(
+   public entry fun withdraw_specific_funds(
         cap: &TruckOwner,          // Admin Capability
         companytruck: &mut Uber_Truck,
         amount:u64,
