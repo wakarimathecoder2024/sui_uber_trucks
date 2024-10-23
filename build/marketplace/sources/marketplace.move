@@ -6,16 +6,19 @@ use sui::coin::{Coin,split, put,take};
 use sui::balance::{Balance,zero};
 use sui::sui::SUI;
 use sui::event;
+ use sui::object::uid_to_inner;
 //define errors
 
 const ETRUCKNOTAVAILABLE:u64=0;
 const EINSUFFICIENTBALANCE:u64=1;
 const EMUSTBERIGISTERED:u64=2;
+const Error_Not_owner:u64=3;
 const Error_Invalid_WithdrawalAmount:u64=4;
 const ENOTBOOKED:u64=5;
 const ENotOwner:u64=6;
 
 public struct User has store{
+    id:u64,
     nameofuser:String,
     balance:Balance<SUI>,
     discountcouponpoints:u64
@@ -42,6 +45,7 @@ public struct Truck has store,drop{
     balance:Balance<SUI>,
     trucks:vector<Truck>,
     trucks_count:u64,
+    users_count:u64,
     registeredusers:vector<User>,
     bookedtrucks:vector<u64>,
     refundrequest:vector<RefundRequest>
@@ -96,6 +100,7 @@ public entry fun register_truck_company(name:String,email:String,contact:String,
         balance:zero<SUI>(),
         trucks:vector::empty(),
         trucks_count:0,
+        users_count:0,
         registeredusers:vector::empty(),
          bookedtrucks:vector::empty(),
          refundrequest:vector::empty()
@@ -117,9 +122,9 @@ public entry fun register_truck_company(name:String,email:String,contact:String,
 public entry fun register_truck(truckcompany:&mut Uber_Truck,ownercap:&TruckOwner,nameoftruck:String,registrationnumber:String,description:String,cost:u64,route:String,_ctx:&mut TxContext){
 //verify that company is already registered do it
   //let owner_id = sui::object::uid_to_inner(&truckcompany.id);
-   assert!(&ownercap.truckcompany_id == object::uid_as_inner(&truckcompany.id),ENotOwner);
+    assert!(&ownercap.truckcompany_id == object::uid_as_inner(&truckcompany.id),ENotOwner);
 
-    let trucks_count=0;
+    let trucks_count=truckcompany.trucks_count;
     let new_truck=Truck {
         id:trucks_count,
         owner:truckcompany.nameofcompany,
@@ -140,7 +145,7 @@ public entry fun register_truck(truckcompany:&mut Uber_Truck,ownercap:&TruckOwne
 public entry fun user_sign_in(name:String,truckcompany:&mut Uber_Truck,_ctx:&mut TxContext){
     let mut index = 0;
     let user_count = vector::length(&truckcompany.registeredusers);
-
+      let users_count=truckcompany.users_count;
    //check if user username is already taken
    while (index < user_count) {
         let user = &truckcompany.registeredusers[index];
@@ -153,10 +158,12 @@ public entry fun user_sign_in(name:String,truckcompany:&mut Uber_Truck,_ctx:&mut
 
     //register user
   let newuser= User{
+         id:users_count,
          nameofuser:name,
          balance:zero<SUI>(),
          discountcouponpoints:0
     };
+     truckcompany.users_count= truckcompany.users_count+1;
     truckcompany.registeredusers.push_back(newuser);
 }
 
@@ -175,9 +182,9 @@ assert!(truckcompany.registeredusers.length()>=userid,EMUSTBERIGISTERED);
 
     let total_price=truckcompany.trucks[truck_id].hirecost;
  
-    let paid = split(payment_coin, total_price, ctx);  
+    let paid = payment_coin.split(total_price, ctx);  
 
-      put(&mut truckcompany.balance, paid); 
+    put(&mut truckcompany.balance, paid); 
 
 //update truck status
    truckcompany.trucks[truck_id].available==false;
@@ -197,8 +204,8 @@ assert!(truckcompany.registeredusers.length()>=userid,EMUSTBERIGISTERED);
         recipient:address,
         ctx: &mut TxContext,
     ) {
-         assert!(&cap.truckcompany_id == object::uid_as_inner(&companytruck.id),ENotOwner);
-
+        //assert!(object::id(companytruck)==cap.truckcompany_id, Error_Not_owner);
+        assert!(&cap.truckcompany_id == object::uid_as_inner(&companytruck.id),ENotOwner);
         let truck_balance=companytruck.balance.value();
         
         let remaining = take(&mut companytruck.balance, truck_balance, ctx);  // Withdraw amount
@@ -222,8 +229,8 @@ assert!(truckcompany.registeredusers.length()>=userid,EMUSTBERIGISTERED);
 
         //verify amount
       assert!(amount > 0 && amount <= companytruck.balance.value(), Error_Invalid_WithdrawalAmount);
-       
-  assert!(&cap.truckcompany_id == object::uid_as_inner(&companytruck.id),ENotOwner);
+           assert!(&cap.truckcompany_id == object::uid_as_inner(&companytruck.id),ENotOwner);
+
         let truck_balance=companytruck.balance.value();
         
         let remaining = take(&mut companytruck.balance, amount, ctx);  // Withdraw amount
@@ -279,7 +286,9 @@ assert!(refundrequeststatement==true,ENOTBOOKED);
          ctx: &mut TxContext
     ) {
 
-        assert!(&cap.truckcompany_id == object::uid_as_inner(&companytruck.id),ENotOwner);
+        
+        assert!(object::id(companytruck)==cap.truckcompany_id, Error_Not_owner);
+
         let truck_balance=companytruck.balance.value();
         //verify if user has enough amount
         assert!(truck_balance>=amount ,EINSUFFICIENTBALANCE);

@@ -18,6 +18,7 @@ const ENOTBOOKED:u64=5;
 const ENotOwner:u64=6;
 
 public struct User has store{
+    id:u64,
     nameofuser:String,
     balance:Balance<SUI>,
     discountcouponpoints:u64
@@ -44,6 +45,7 @@ public struct Truck has store,drop{
     balance:Balance<SUI>,
     trucks:vector<Truck>,
     trucks_count:u64,
+    users_count:u64,
     registeredusers:vector<User>,
     bookedtrucks:vector<u64>,
     refundrequest:vector<RefundRequest>
@@ -98,6 +100,7 @@ public entry fun register_truck_company(name:String,email:String,contact:String,
         balance:zero<SUI>(),
         trucks:vector::empty(),
         trucks_count:0,
+        users_count:0,
         registeredusers:vector::empty(),
          bookedtrucks:vector::empty(),
          refundrequest:vector::empty()
@@ -121,7 +124,7 @@ public entry fun register_truck(truckcompany:&mut Uber_Truck,ownercap:&TruckOwne
   //let owner_id = sui::object::uid_to_inner(&truckcompany.id);
     assert!(&ownercap.truckcompany_id == object::uid_as_inner(&truckcompany.id),ENotOwner);
 
-    let trucks_count=0;
+    let trucks_count=truckcompany.trucks_count;
     let new_truck=Truck {
         id:trucks_count,
         owner:truckcompany.nameofcompany,
@@ -142,7 +145,7 @@ public entry fun register_truck(truckcompany:&mut Uber_Truck,ownercap:&TruckOwne
 public entry fun user_sign_in(name:String,truckcompany:&mut Uber_Truck,_ctx:&mut TxContext){
     let mut index = 0;
     let user_count = vector::length(&truckcompany.registeredusers);
-
+      let users_count=truckcompany.users_count;
    //check if user username is already taken
    while (index < user_count) {
         let user = &truckcompany.registeredusers[index];
@@ -155,10 +158,12 @@ public entry fun user_sign_in(name:String,truckcompany:&mut Uber_Truck,_ctx:&mut
 
     //register user
   let newuser= User{
+         id:users_count,
          nameofuser:name,
          balance:zero<SUI>(),
          discountcouponpoints:0
     };
+     truckcompany.users_count= truckcompany.users_count+1;
     truckcompany.registeredusers.push_back(newuser);
 }
 
