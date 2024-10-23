@@ -6,13 +6,11 @@ use sui::coin::{Coin,split, put,take};
 use sui::balance::{Balance,zero};
 use sui::sui::SUI;
 use sui::event;
- use sui::object::uid_to_inner;
 //define errors
 
 const ETRUCKNOTAVAILABLE:u64=0;
 const EINSUFFICIENTBALANCE:u64=1;
 const EMUSTBERIGISTERED:u64=2;
-const Error_Not_owner:u64=3;
 const Error_Invalid_WithdrawalAmount:u64=4;
 const ENOTBOOKED:u64=5;
 const ENotOwner:u64=6;
@@ -193,13 +191,13 @@ assert!(truckcompany.registeredusers.length()>=userid,EMUSTBERIGISTERED);
 
 
   //owener withdraw all funds
- public fun withdraw_all_funds(
+ public entry fun withdraw_all_funds(
         cap: &TruckOwner,          // Admin Capability
         companytruck: &mut Uber_Truck,
         recipient:address,
         ctx: &mut TxContext,
     ) {
-        assert!(object::id(companytruck)==cap.truckcompany_id, Error_Not_owner);
+         assert!(&cap.truckcompany_id == object::uid_as_inner(&companytruck.id),ENotOwner);
 
         let truck_balance=companytruck.balance.value();
         
@@ -214,7 +212,7 @@ assert!(truckcompany.registeredusers.length()>=userid,EMUSTBERIGISTERED);
 
   //owener widthradw specific funds
  
-   public fun withdraw_specific_funds(
+   public entry fun withdraw_specific_funds(
         cap: &TruckOwner,          // Admin Capability
         companytruck: &mut Uber_Truck,
         amount:u64,
@@ -224,8 +222,8 @@ assert!(truckcompany.registeredusers.length()>=userid,EMUSTBERIGISTERED);
 
         //verify amount
       assert!(amount > 0 && amount <= companytruck.balance.value(), Error_Invalid_WithdrawalAmount);
-        assert!(object::id(companytruck)==cap.truckcompany_id, Error_Not_owner);
-
+       
+  assert!(&cap.truckcompany_id == object::uid_as_inner(&companytruck.id),ENotOwner);
         let truck_balance=companytruck.balance.value();
         
         let remaining = take(&mut companytruck.balance, amount, ctx);  // Withdraw amount
@@ -281,9 +279,7 @@ assert!(refundrequeststatement==true,ENOTBOOKED);
          ctx: &mut TxContext
     ) {
 
-        
-        assert!(object::id(companytruck)==cap.truckcompany_id, Error_Not_owner);
-
+        assert!(&cap.truckcompany_id == object::uid_as_inner(&companytruck.id),ENotOwner);
         let truck_balance=companytruck.balance.value();
         //verify if user has enough amount
         assert!(truck_balance>=amount ,EINSUFFICIENTBALANCE);
